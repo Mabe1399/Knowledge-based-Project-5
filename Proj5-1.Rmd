@@ -34,44 +34,49 @@ output:
 seed <- set.seed(42)
 options(warn = -1)
 Sys.setenv(JAVA_HOME='')
-# dependencies
-library(kableExtra)
-library(ggfortify)
-library(dplyr)
-# load packages
-library(rmcfs)
-library(rJava)
-library(R.ROSETTA)
-library(devtools)
-library(VisuNet)
 if (!requireNamespace("BiocManager", quietly = TRUE))
   install.packages("BiocManager")
 BiocManager::install("clusterProfiler", force=TRUE)
 if (!requireNamespace("BiocManager", quietly = TRUE))
   install.packages("BiocManager")
-BiocManager::install("org.Hs.eg.db", force = TRUE)
+# BiocManager::install("org.Hs.eg.db", force = TRUE)
+# dependencies
+library(kableExtra)
+library(ggfortify)
+library(dplyr)
+library(rmcfs)
+library(rJava)
+library(R.ROSETTA)
+library(devtools)
+library('VisuNet')
+library('clusterProfiler')
+library('org.Hs.eg.db')
+library('wordcloud') 
+library('RColorBrewer')
+library('tm')
+
 library(org.Hs.eg.db)
 
 # options
 knitr::opts_chunk$set(echo = TRUE)
 ```
 
+```{=tex}
 \newpage
 \pagenumbering{arabic}
 \pagestyle{fancy}
 \fancyhead[L]{Project 5:1 - Sam Hurenkamp & Matias Becker Burgos}
 \fancyhead[R]{\rightmark}
-
-
+```
 ## Research Question
+
 `r text_spec("Influenza A viruses (IAVs) are zoonotic pathogens that can infect a broad range of animals from birds to pigs and humans. Most of these species have wild birds as their natural hosts. IAVs are usually adapted and relatively restricted to a single host but occasionally the virus can jump and adapt to a new host species. The interspecies transmission requires that IAVs adapt to the new host and the whole process is facilitated by their high mutation rates. This can result in epidemics and pandemics with severe consequences for both human and animal life. Given our poor understanding of the ost-adaptation process of the virus, which can be a major factor for such epidemics and pandemics, it is very hard to predict the type of the virus that will cause the coming outbreaks. The hemagglutinin protein plays a crucial part in defining the adaptation of the virus to different hosts since it binds to the receptor providing the entry into host cells. The avian strains of the IAVs are known to prefer a receptor with α2,3-sialic acid linkages while the human strains prefer a receptor with α2,6-sialic acid linkages. However, other proteins subunits have also previously been shown to play a role in the adaptation of IAVs to different hosts.", color = "#c27b00", bold=TRUE)`
 
-
-
 ## Data Exploration
-#### Description of the dataset
-`r text_spec("The data is decision tables made from the multiple sequence alignments of the proteins. The decision classes are either Avian or Human indicating the hosts in which the viruses were found.", color = "#c27b00", bold=TRUE)`
 
+#### Description of the dataset
+
+`r text_spec("The data is decision tables made from the multiple sequence alignments of the proteins. The decision classes are either Avian or Human indicating the hosts in which the viruses were found.", color = "#c27b00", bold=TRUE)`
 
 ```{r data_exploration}
 df <- read.csv("Project5.csv", sep = "\t")
@@ -94,7 +99,7 @@ kbl(df.head) %>%
 
 # Remove null (gap) columns
 df <- df %>%
-  select(where(~ !all(. == "?"))) # regex - Select only columns where all values are not "?"
+  dplyr::select(where(~ !all(. == "?"))) # regex - Select only columns where all values are not "?"
 df.head <- head(df, 10)
 kbl(df.head) %>%
   kable_styling(bootstrap_options = c("striped", "hover"), full_width = F, position = "center")
@@ -133,38 +138,33 @@ Our most significant factor in our set of predictors is P635 (RI=0.89). The leas
   plot.idgraph(gid, label_dist = 0.5)
 ```
 
-The graph is an interdependence graph that outlines the interdependence of specific genes 
-(attributes/features) – represented by a node - on one another. The edges show the type of 
-relationship or dependence between the nodes, with the edge color/depth showing the strength 
-of that relationship. Nodes with a lot of influence or dependence can be considered more 
-influential (e.g., P86 in the picture above).
+The graph is an interdependence graph that outlines the interdependence of specific genes (attributes/features) – represented by a node - on one another. The edges show the type of relationship or dependence between the nodes, with the edge color/depth showing the strength of that relationship. Nodes with a lot of influence or dependence can be considered more influential (e.g., P86 in the picture above).
 
-
-## Rosetta 
+## Rosetta
 
 ```{r Rosetta}
-  # ros <- rosetta(result$data, discrete=T, roc = TRUE, clroc = "Avian")
-  # 
-  # rules <- ros$main
-  # kbl(result$data) %>%
-  #  kable_styling(bootstrap_options = c("striped", "hover"), full_width = F, position = "center")
-  # 
-  # # rule sets for avian species
-  # rlsAv <- viewRules(rules[rules$decision == "Avian", ])
-  # rlsAv
-  # 
-  # # rule sets for humans
-  # rlsHum <- viewRules(rules[rules$decision == "Human", ])
-  # rlsHum
-  # 
-  # # # We can check how much variation there is in amino acids per position/site in the protein
-  # # hist(len(sapply(result$data, table)))
+  
+  ros <- rosetta(result$data, discrete=T, roc = TRUE, clroc = "Avian")
+
+  rules <- ros$main
+  kbl(result$data) %>%
+   kable_styling(bootstrap_options = c("striped", "hover"), full_width = F, position = "center")
+
+  # rule sets for avian species
+  rlsAv <- viewRules(rules[rules$decision == "Avian", ])
+  rlsAv
+
+  # rule sets for humans
+  rlsHum <- viewRules(rules[rules$decision == "Human", ])
+  rlsHum
+
+  # # We can check how much variation there is in amino acids per position/site in the protein
+  # hist(len(sapply(result$data, table)))
 ```
 
-  
 ## VisuNet
+
 ```{r}
 visunet(rlsAv)
 
 ```
-
