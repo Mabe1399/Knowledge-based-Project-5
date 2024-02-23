@@ -11,6 +11,8 @@ library:
   - rJava
   - R.ROSETTA
   - devtools
+  - VisuNet
+  - org.Hs.eg.db
 header-includes:
   - \usepackage{fancyhdr}
   - \usepackage{titling}
@@ -41,6 +43,14 @@ library(rmcfs)
 library(rJava)
 library(R.ROSETTA)
 library(devtools)
+library(VisuNet)
+if (!requireNamespace("BiocManager", quietly = TRUE))
+  install.packages("BiocManager")
+BiocManager::install("clusterProfiler", force=TRUE)
+if (!requireNamespace("BiocManager", quietly = TRUE))
+  install.packages("BiocManager")
+BiocManager::install("org.Hs.eg.db", force = TRUE)
+library(org.Hs.eg.db)
 
 # options
 knitr::opts_chunk$set(echo = TRUE)
@@ -109,7 +119,7 @@ Because we do not have any continuous data, we can avoid discretization of the d
 For this step, we use Monte Carlo Feature Selection, which uses random sampling to estimate the importance of each feature (which is why we cleaned the data before selection).
 
 ```{r mcfs}
-  result <- mcfs(Host ~ ., df, projections = 1500, projectionSize = 0.1, splits = 5, splitSetSize = 500, cutoffPermutations = 6, threadsNumber = 16, seed = seed)
+  result <- mcfs(Host ~ ., df, projections = 1500, projectionSize = 0.1, splits = 5, splitSetSize = 500, cutoffPermutations = 6, threadsNumber = 8, seed = seed)
   plot(result, type="distances", legend=TRUE)
   result2 <- result$RI[1:result$cutoff_value,]
   result2
@@ -131,28 +141,30 @@ influential (e.g., P86 in the picture above).
 
 
 ## Rosetta 
+
 ```{r Rosetta}
-
-ros <- rosetta(result$data, discrete=T, roc = TRUE, clroc = "Avian")
-ros
-
-rules <- ros$main
-kbl(result$data) %>%
-  kable_styling(bootstrap_options = c("striped", "hover"), full_width = F, position = "center")
-
-# rule sets for avian species
-rlsAv <- viewRules(rules[rules$decision == "Avian", ])
-rlsAv
-
-# rule sets for humans
-rlsHum <- viewRules(rules[rules$decision == "Human", ])
-rlsHum
-
-# 
-# # We can check how much variation there is in amino acids per position/site in the protein
-# hist(len(sapply(result$data, table)))
-
+  # ros <- rosetta(result$data, discrete=T, roc = TRUE, clroc = "Avian")
+  # 
+  # rules <- ros$main
+  # kbl(result$data) %>%
+  #  kable_styling(bootstrap_options = c("striped", "hover"), full_width = F, position = "center")
+  # 
+  # # rule sets for avian species
+  # rlsAv <- viewRules(rules[rules$decision == "Avian", ])
+  # rlsAv
+  # 
+  # # rule sets for humans
+  # rlsHum <- viewRules(rules[rules$decision == "Human", ])
+  # rlsHum
+  # 
+  # # # We can check how much variation there is in amino acids per position/site in the protein
+  # # hist(len(sapply(result$data, table)))
 ```
 
+  
+## VisuNet
+```{r}
+visunet(rlsAv)
 
+```
 
