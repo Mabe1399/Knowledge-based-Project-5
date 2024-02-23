@@ -1,0 +1,158 @@
+---
+title: "Proj5-1"
+author: "Sam Hurenkamp & Matias Becker Burgos"
+date: "2024-02-22"
+library:
+  - tinytex
+  - kableExtra
+  - ggfortify
+  - dplyr
+  - rmcfs
+  - rJava
+  - R.ROSETTA
+  - devtools
+header-includes:
+  - \usepackage{fancyhdr}
+  - \usepackage{titling}
+  - \usepackage{ragged2e}
+  - \pagenumbering{gobble}
+  - \pretitle{\begin{center}\LARGE\includegraphics[width=6cm, height=6cm]{   Uppsala_universitet_logo.jpg}\\[\bigskipamount]}
+  - \posttitle{\end{center}}
+output:
+  html_document:
+    theme: cerulean
+    toc: true
+    toc_float: true
+  pdf_document:
+   toc: true
+   keep_tex: true
+---
+
+```{r setup, include=FALSE}
+seed <- set.seed(42)
+options(warn = -1)
+Sys.setenv(JAVA_HOME='')
+# dependencies
+library(kableExtra)
+library(ggfortify)
+library(dplyr)
+# load packages
+library(rmcfs)
+library(rJava)
+library(R.ROSETTA)
+library(devtools)
+
+# options
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+\newpage
+\pagenumbering{arabic}
+\pagestyle{fancy}
+\fancyhead[L]{Project 5:1 - Sam Hurenkamp & Matias Becker Burgos}
+\fancyhead[R]{\rightmark}
+
+
+## Research Question
+`r text_spec("Influenza A viruses (IAVs) are zoonotic pathogens that can infect a broad range of animals from birds to pigs and humans. Most of these species have wild birds as their natural hosts. IAVs are usually adapted and relatively restricted to a single host but occasionally the virus can jump and adapt to a new host species. The interspecies transmission requires that IAVs adapt to the new host and the whole process is facilitated by their high mutation rates. This can result in epidemics and pandemics with severe consequences for both human and animal life. Given our poor understanding of the ost-adaptation process of the virus, which can be a major factor for such epidemics and pandemics, it is very hard to predict the type of the virus that will cause the coming outbreaks. The hemagglutinin protein plays a crucial part in defining the adaptation of the virus to different hosts since it binds to the receptor providing the entry into host cells. The avian strains of the IAVs are known to prefer a receptor with α2,3-sialic acid linkages while the human strains prefer a receptor with α2,6-sialic acid linkages. However, other proteins subunits have also previously been shown to play a role in the adaptation of IAVs to different hosts.", color = "#c27b00", bold=TRUE)`
+
+
+
+## Data Exploration
+#### Description of the dataset
+`r text_spec("The data is decision tables made from the multiple sequence alignments of the proteins. The decision classes are either Avian or Human indicating the hosts in which the viruses were found.", color = "#c27b00", bold=TRUE)`
+
+
+```{r data_exploration}
+df <- read.csv("Project5.csv", sep = "\t")
+df.head <- head(df, 10)
+kbl(df.head) %>%
+  kable_styling(bootstrap_options = c("striped", "hover"), full_width = F, position = "center")
+dim(df)
+
+# check target labels
+target_class_labels <- unique(df$Host)
+target_class_labels
+
+
+# initial read shows that some T AAs were misread as "TRUE" and F as "FALSE". Let's fix that.
+df[] <- lapply(df, function(x) ifelse(x == "TRUE", "T", x))
+df[] <- lapply(df, function(x) ifelse(x == "FALSE", "F", x))
+df.head <- head(df, 10)
+kbl(df.head) %>%
+  kable_styling(bootstrap_options = c("striped", "hover"), full_width = F, position = "center")
+
+# Remove null (gap) columns
+df <- df %>%
+  select(where(~ !all(. == "?"))) # regex - Select only columns where all values are not "?"
+df.head <- head(df, 10)
+kbl(df.head) %>%
+  kable_styling(bootstrap_options = c("striped", "hover"), full_width = F, position = "center")
+dim(df)
+
+
+df$P772  # Some values in here, but sparsity is extremely high. Should consider just removing these columns
+df <- df[, sapply(df, function(x) mean(x == "?") < 0.8)]
+df.head <- head(df, 10)
+kbl(df.head) %>%
+  kable_styling(bootstrap_options = c("striped", "hover"), full_width = F, position = "center")
+dim(df)
+
+
+
+```
+
+## MCFS - Feature Selection
+
+Because we do not have any continuous data, we can avoid discretization of the data to lower complexity and instead focus on feature selection. Similarly, there will be no need to bin our data into groups (e.g., "low", "medium", "high") as our data is already discrete and categorical.
+
+For this step, we use Monte Carlo Feature Selection, which uses random sampling to estimate the importance of each feature (which is why we cleaned the data before selection).
+
+```{r mcfs}
+  result <- mcfs(Host ~ ., df, projections = 1500, projectionSize = 0.1, splits = 5, splitSetSize = 500, cutoffPermutations = 6, threadsNumber = 16, seed = seed)
+  plot(result, type="distances", legend=TRUE)
+  result2 <- result$RI[1:result$cutoff_value,]
+  result2
+```
+
+Our most significant factor in our set of predictors is P635 (RI=0.89). The least significant factor is P389(RI=0.056); ΔRI = 0.834.
+
+```{r mcfs_plot}
+  # prepare id graph plot
+  gid <- build.idgraph(result, size = 20)
+  plot.idgraph(gid, label_dist = 0.5)
+```
+
+The graph is an interdependence graph that outlines the interdependence of specific genes 
+(attributes/features) – represented by a node - on one another. The edges show the type of 
+relationship or dependence between the nodes, with the edge color/depth showing the strength 
+of that relationship. Nodes with a lot of influence or dependence can be considered more 
+influential (e.g., P86 in the picture above).
+
+
+## Rosetta 
+```{r Rosetta}
+
+ros <- rosetta(result$data, discrete=T, roc = TRUE, clroc = "Avian")
+ros
+
+rules <- ros$main
+kbl(result$data) %>%
+  kable_styling(bootstrap_options = c("striped", "hover"), full_width = F, position = "center")
+
+# rule sets for avian species
+rlsAv <- viewRules(rules[rules$decision == "Avian", ])
+rlsAv
+
+# rule sets for humans
+rlsHum <- viewRules(rules[rules$decision == "Human", ])
+rlsHum
+
+# 
+# # We can check how much variation there is in amino acids per position/site in the protein
+# hist(len(sapply(result$data, table)))
+
+```
+
+
+
