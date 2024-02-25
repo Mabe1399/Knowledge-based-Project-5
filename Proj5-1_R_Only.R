@@ -130,6 +130,15 @@ rosAvJohnson <- rosetta(result$data, discrete=T, roc = TRUE, clroc = "Avian")
 rosHumGenetic <- rosetta(result$data, discrete=T, roc = TRUE, reducer="Genetic", clroc = "Human")
 rosHumJohnson <- rosetta(result$data, discrete=T, roc = TRUE, clroc = "Human")
 
+# roc
+rosAvGenetic$ROCstats
+
+plotRule(df, recAutconJohnson, type="heatmap", discrete=T, ind=topRuleInd)
+plotMeanROC(rosAvJohnson)
+plotMeanROC(rosAvGenetic)
+
+
+
 # ------- Build Rulesets
 # AVIAN
 rlsAvGenetic <- rosAvGenetic$main
@@ -143,6 +152,39 @@ rlsHumGenetic <- rosHumGenetic$main
 rlsHumJohnson <- rosHumJohnson$main
 res_rlsHumGenetic <- viewRules(rlsHumGenetic[rlsHumGenetic$decision == "Human", ])
 res_rlsHumJohnson <- viewRules(rlsHumJohnson[rlsHumJohnson$decision == "Human", ])
+
+# ANALYZE rule based model
+# significant rules in the model
+tabS <- table(rlsAvGenetic[rules$pValue < 0.05,]$decision)
+tabS
+
+# fraction of significant rules, in [%]
+tabS[1]/length(rlsAvGenetic$decision=="Avian")*100
+tabS[2]/length(rlsAvGenetic$decision=="Human")*100
+
+featsJohnson <- getFeatures(rlsAvGenetic, filter = T, filterType = "pvalue", thr = 0.05)
+featsGenetic <- getFeatures(rlsAvGenetic, filter = T, filterType = "pvalue", thr = 0.05)
+featsJohnson
+featsGenetic
+
+
+featsJohnsonAv <- featsJohnson$features$Avian
+featsJohnsonAv
+featsJohnsonHum <- featsJohnson$features$Human
+featsJohnsonHum
+
+topRuleIndGA <- which(sapply(rosAvGenetic$main$features, function(x) length(strsplit(x, ',')[[1]])) == 2 & rlsAvGenetic$decision == "Avian")[1]
+topRuleIndGA
+topRuleIndGH <- which(sapply(rosAvGenetic$main$features, function(x) length(strsplit(x, ',')[[1]])) == 2 & rlsAvGenetic$decision == "Human")[1]
+topRuleIndGH
+
+
+
+
+rlsAvGenetic$pValue[topRuleIndG]
+rlsAvGenetic$pValue[topRuleIndG]
+rlsAvJohnson$pValue[1]
+rlsAvJohnson$pValue[1]
 
 
 
@@ -171,10 +213,10 @@ visAvGenetic <- VisuNet::visunet(rlsAvGenetic)  # visunet - Avian - Genetic
 visHumGenetic <- VisuNet::visunet(rlsHumGenetic)  # visunet - Avian - Genetic
 
 
-
+table(unlist(strsplit(as.character(recAutconJohnson$levels), ",")))
 
 Hums <- visAvGenetic$Human
-rlsHum <- rlsHumGenetic
+rlsHum <- rlsHumGenetic$RO
  
 Avs <- visAvGenetic$Avian
 
