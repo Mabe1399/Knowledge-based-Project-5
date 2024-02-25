@@ -1,3 +1,4 @@
+setwd("A:/MSc/KB_Project/Knowledge-based-Project-5")
 seed <- set.seed(42)
 options(warn = -1)
 Sys.setenv(JAVA_HOME='')
@@ -5,28 +6,42 @@ Sys.setenv(JAVA_HOME='')
 # BiocManager::install("clusterProfiler", force=TRUE)
 # BiocManager::install("org.Hs.eg.db", force = TRUE)
 # install.packages("DT")
-library(kableExtra)
-library(ggfortify)
-library(dplyr)
-library(rmcfs)
-library(rJava)
-library(R.ROSETTA)
-library(devtools)
-library(kableExtra)
-library(devtools)
-library('VisuNet')
+library('ggfortify')
+library('dplyr')
+library('rmcfs')
+library('rJava')
+library('R.ROSETTA')
+library('devtools')
+library('kableExtra')
+library('devtools')
 library('clusterProfiler')
 library('org.Hs.eg.db')
 library('wordcloud') 
 library('RColorBrewer')
 library('tm')
 library('DT')
+# install_github("komorowskilab/VisuNet", force=TRUE)
+library(VisuNet)
 
+# -------------------------------------
+#   DATA EXPLORATION/PREPROCESSING
+# -------------------------------------
+
+
+## load data
 df <- read.csv("Project5.csv", sep = "\t")
-df.head <- head(df, 10)
-kbl(df.head) %>%
+df.head <- head(df, 100)
+kbl(df) %>%
   kable_styling(bootstrap_options = c("striped", "hover"), full_width = F, position = "center")
 dim(df)
+
+tab <- as.data.frame(table(df$Host))
+colnames(tab) <- c("Host", "Frequency")
+kbl(tab) %>%
+  kable_styling(bootstrap_options = c("striped", "hover"), full_width = F, position = "center", font_size = 80)
+
+
+
 
 # initial read shows that some T AAs were misread as "TRUE" and F as "FALSE". Let's fix that.
 df[] <- lapply(df, function(x) ifelse(x == "TRUE", "T", x))
@@ -37,27 +52,44 @@ kbl(df.head) %>%
 
 # Remove null columns
 df <- df %>%
-  dplyr::select(where(~ !all(. == "?")))
+dplyr::select(where(~ !all(. == "?")))
 df.head <- head(df, 10)
 kbl(df.head) %>%
   kable_styling(bootstrap_options = c("striped", "hover"), full_width = F, position = "center")
 dim(df)
 
 
-df$P772  # Some values in here, but sparsity is extremely high. Should consider just removing these columns?
+df$P772  # Some values in here, but sparsity is extremely high. Should consider just removing these columns
+df <- df[, sapply(df, function(x) mean(x == "?") < 0.8)]
+df.head <- head(df, 10)
+kbl(df.head) %>%
+  kable_styling(bootstrap_options = c("striped", "hover"), full_width = F, position = "center")
+dim(df)
 
-result <- mcfs(Host ~ ., df, projections = 1500, projectionSize = 0.1, splits = 5, splitSetSize = 500, cutoffPermutations = 6, threadsNumber = 8, seed = seed)
+
+
+# -------------------------
+#           MCFS
+# -------------------------
+
+result <- mcfs(Host ~ ., df, projections = 3000, projectionSize = 0.1, splits = 5, cutoffPermutations = 20, threadsNumber = 16, seed = seed)
 plot(result, type="distances", legend=TRUE)
 result2 <- result$RI[1:result$cutoff_value,]
 result2
-
 df$Host
 df[1, c(1: 25, dim(df)[2])]
 df$P48
-# 
-# rownames(df) <- df[1]
-# df <- df[2:dim(df)[2]]
-# df.head <- head(df, 10)
+
+kbl(result$RI) %>%
+  kable_styling(bootstrap_options = c("striped", "hover"), full_width = F, position = "center")
+
+dim(result$data)
+
+kbl(result$data) %>%
+  kable_styling(bootstrap_options = c("striped", "hover"), full_width = F, position = "center")
+
+df <- df[2:dim(df)[2]]
+df.head <- head(df, 10)
 kbl(df.head) %>%
   kable_styling(bootstrap_options = c("striped", "hover"), full_width = F, position = "center")
 
@@ -65,28 +97,103 @@ table(df$Host)
 
 dim(result$data)
 
+tab <- as.data.frame(table(result$data$P48))
+colnames(tab) <- c("AA", "Freq")
+kbl(tab) %>%
+  kable_styling(bootstrap_options = c("striped", "hover"), full_width = F, position = "center", font_size = 80)
+
+
+
+
 # # prepare id graph plot
-# gid <- build.idgraph(result, size = 20)
-# plot.idgraph(gid, label_dist = 0.5)
-# 
-# # 
-rosAv <- rosetta(result$data, discrete=T, roc = TRUE, clroc = "Avian")
-rosAv
+gid <- build.idgraph(result, orphan_nodes = T)
+plot.idgraph(gid, label_dist = 1, cex=2, seed=seed)
+gid <- build.idgraph(result, size=10, orphan_nodes = T)
+plot.idgraph(gid, label_dist = 1, cex=2, seed=seed)
 
-rules <- rosAv$main
-rlsAv <- viewRules(rules[rules$decision == "Avian", ])
-rlsAv
-rosHum <- rosetta(result$data, discrete=T, roc = TRUE, clroc = "Avian")
-rosHum
-rules <- rosHum$main
-rlsHum <- viewRules(rules[rules$decision == "Human", ])
-rlsHum
+# ?build.idgraph
+# ?plot.idgraph
+
+#------------------
+#   R. ROSETTA
+#------------------
+#Documentation
+?rosetta
 
 
-kbl(result$data) %>%
+# ------- Run Rosetta classification
+# AVIAN
+rosAvGenetic <- rosetta(result$data, discrete=T, roc = TRUE, reducer="Genetic", clroc = "Avian")
+rosAvJohnson <- rosetta(result$data, discrete=T, roc = TRUE, clroc = "Avian")
+
+# HUMAN
+rosHumGenetic <- rosetta(result$data, discrete=T, roc = TRUE, reducer="Genetic", clroc = "Human")
+rosHumJohnson <- rosetta(result$data, discrete=T, roc = TRUE, clroc = "Human")
+
+# ------- Build Rulesets
+# AVIAN
+rlsAvGenetic <- rosAvGenetic$main
+rlsAvJohnson <- rosAvJohnson$main
+res_rlsAvGenetic <- viewRules(rlsAvGenetic[rlsAvGenetic$decision == "Avian", ])
+res_rlsAvJohnson <- viewRules(rlsAvJohnson[rlsAvJohnson$decision == "Avian", ])
+
+
+# HUMAN
+rlsHumGenetic <- rosHumGenetic$main
+rlsHumJohnson <- rosHumJohnson$main
+res_rlsHumGenetic <- viewRules(rlsHumGenetic[rlsHumGenetic$decision == "Human", ])
+res_rlsHumJohnson <- viewRules(rlsHumJohnson[rlsHumJohnson$decision == "Human", ])
+
+
+
+# ------- View Rules
+
+# JOHNSON
+kbl(rlsAvJohnson) %>%
+  kable_styling(bootstrap_options = c("striped", "hover"), full_width = F, position = "center")
+kbl(rlsHumJohnson) %>%
   kable_styling(bootstrap_options = c("striped", "hover"), full_width = F, position = "center")
 
-visAv <- VisuNet::visunet(rules)
-visAv
+
+# GENETIC
+kbl(rlsAvGenetic) %>%
+  kable_styling(bootstrap_options = c("striped", "hover"), full_width = F, position = "center")
+kbl(rlsHumGenetic) %>%
+  kable_styling(bootstrap_options = c("striped", "hover"), full_width = F, position = "center")
+
+# ------- Visualize the results in VisuNet
+# JOHNSON
+visAvJohnson <- VisuNet::visunet(rlsAvJohnson)  # visuNet - Avian - Johnson
+visHumJohnson <- VisuNet::visunet(rlsHumJohnson)  # visunet - Human - Johnson
+
+# GENETIC
+visAvGenetic <- VisuNet::visunet(rlsAvGenetic)  # visunet - Avian - Genetic
+visHumGenetic <- VisuNet::visunet(rlsHumGenetic)  # visunet - Avian - Genetic
+
+
+
+
+Hums <- visAvGenetic$Human
+rlsHum <- rlsHumGenetic
+ 
+Avs <- visAvGenetic$Avian
+
+
+Hums
+
+
+visAvGenetic$all$nodes
+
+
+# View results
+visAvJohnson
+rlsAvJohnson
+visAvGenetic
+rlsAvGenetic
+
+rlsSigGen <- rlsAvGenetic[rlsAvGenetic$pValue < 0.05 & rlsAvGenetic$decision == "Avian", ]
+dim(rlsSigGen)
+?visunet
+?rosetta
 
 
